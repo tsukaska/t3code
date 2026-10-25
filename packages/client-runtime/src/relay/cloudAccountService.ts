@@ -95,10 +95,10 @@ export type CloudAccountState =
 
 export interface CloudAccountService<S extends CloudAccountSource> {
   /**
-   * Observes `source` for the rest of its lifetime. Attaching a different
-   * source detaches the previous one; re-attaching the same source is a no-op.
+   * Observes `source` until the returned function runs. Attaching while another
+   * source is attached detaches that one first.
    */
-  readonly attach: (source: S) => void;
+  readonly attach: (source: S) => () => void;
   readonly getState: () => CloudAccountState;
 }
 
@@ -182,16 +182,19 @@ export function createCloudAccountService<S extends CloudAccountSource>(
     activate(source, step, wasActive);
   };
 
+  const detach = () => {
+    if (!attached) return;
+    attached.unsubscribe();
+    attached = null;
+    generation += 1;
+    state = { _tag: "Unobserved" };
+    handlers.detach();
+  };
+
   return {
     attach(source) {
-      if (attached?.source === source) return;
-      if (attached) {
-        attached.unsubscribe();
-        generation += 1;
-        state = { _tag: "Unobserved" };
-        handlers.detach();
-      }
-      attached = {
+      detach();
+      const current = {
         source,
         unsubscribe: source.addListener((resources) => {
           // Clerk reports `user: undefined` until it loads; pending sessions
@@ -199,6 +202,10 @@ export function createCloudAccountService<S extends CloudAccountSource>(
           if (resources.user === undefined) return;
           observe(source, resources.user?.id ?? null);
         }),
+      };
+      attached = current;
+      return () => {
+        if (attached === current) detach();
       };
     },
     getState: () => state,

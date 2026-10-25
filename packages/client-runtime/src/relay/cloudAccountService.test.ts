@@ -102,7 +102,6 @@ describe("createCloudAccountService", () => {
     const { service, log, nextActivation } = makeService();
     const { source, emit } = makeSource();
     service.attach(source);
-    service.attach(source);
 
     emit(undefined);
     expect(service.getState()).toEqual({ _tag: "Unobserved" });
@@ -227,5 +226,19 @@ describe("createCloudAccountService", () => {
     expect(first.isSubscribed()).toBe(false);
     expect(second.isSubscribed()).toBe(true);
     expect(log).toEqual(["detach"]);
+  });
+
+  it("releases credentials and stops observing when detached", async () => {
+    const { service, log, nextActivation } = makeService();
+    const { source, emit, isSubscribed } = makeSource();
+    const detach = service.attach(source);
+    const activation = nextActivation();
+    emit({ id: "a" });
+    await activation;
+
+    detach();
+    expect(isSubscribed()).toBe(false);
+    expect(service.getState()).toEqual({ _tag: "Unobserved" });
+    expect(log).toEqual(["prepare:a", "activate:a:false", "detach"]);
   });
 });

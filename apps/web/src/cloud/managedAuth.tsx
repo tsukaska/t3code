@@ -10,7 +10,7 @@ import {
   settleAsyncResult,
 } from "@t3tools/client-runtime/state/runtime";
 import * as Effect from "effect/Effect";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import { environmentCatalog } from "../connection/catalog";
 import { runtime } from "../lib/runtime";
@@ -62,11 +62,9 @@ const managedRelayAccountService = createCloudAccountService<ClerkInstance>({
 });
 
 export function ManagedRelayAuthProvider({ children }: { readonly children: ReactNode }) {
-  // Render-time attach: ClerkProvider lazy-loads clerk-js, so its context is the
-  // earliest place the instance exists. attach is idempotent, and IsomorphicClerk
-  // queues listeners until load, so emissions and their atom writes arrive after
-  // render.
+  // ClerkProvider creates the Clerk instance and owns its lifetime, so the
+  // account service observes it for as long as this provider is mounted.
   const clerk = useClerk();
-  managedRelayAccountService.attach(clerk);
+  useEffect(() => managedRelayAccountService.attach(clerk), [clerk]);
   return children;
 }
