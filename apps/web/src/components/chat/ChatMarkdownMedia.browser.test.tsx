@@ -1,3 +1,4 @@
+import type { PreparedConnection } from "@t3tools/client-runtime/connection";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -29,9 +30,25 @@ vi.mock(import("~/state/assets"), async (original) => {
 });
 vi.mock(import("~/state/session"), async (original) => {
   const { Option } = await import("effect");
+  const { PrimaryConnectionTarget } = await import("@t3tools/client-runtime/connection");
+  const { EnvironmentId } = await import("@t3tools/contracts");
+  const target = new PrimaryConnectionTarget({
+    environmentId: EnvironmentId.make("environment-1"),
+    label: "Local",
+    httpBaseUrl: "http://localhost:1",
+    wsBaseUrl: "ws://localhost:1",
+  });
+  const prepared: PreparedConnection = {
+    environmentId: target.environmentId,
+    label: target.label,
+    httpBaseUrl: target.httpBaseUrl,
+    socketUrl: target.wsBaseUrl,
+    httpAuthorization: null,
+    target,
+  };
   return {
     ...(await original()),
-    usePreparedConnection: (() => Option.some({ httpBaseUrl: "http://localhost:1" })) as never,
+    usePreparedConnection: () => Option.some(prepared),
   };
 });
 vi.mock(import("~/state/filesystem"), async (original) => ({
