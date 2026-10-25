@@ -84,6 +84,55 @@ describe("makeQueuedRunEditStore", () => {
     store.resumeExitWatch("env:thread");
     expect(exits).toHaveLength(1);
   });
+
+  // The runs read the thread's detail, a live server subscription; a thread
+  // with no edit open must not keep it.
+  it("holds the thread's runs only while an edit is open and watching", () => {
+    // The registry removes idle nodes in a scheduled task; the test runs those tasks itself.
+    const tasks: Array<() => void> = [];
+    const registry = AtomRegistry.make({
+      scheduleTask: (task) => {
+        tasks.push(task);
+        return () => {};
+      },
+    });
+    const settle = () => {
+      for (const task of tasks.splice(0)) task();
+    };
+    const source = Atom.make<ReadonlyArray<QueuedRunStatus> | null>(queued());
+    let mounted = 0;
+    const runs = Atom.make((get) => {
+      mounted += 1;
+      get.addFinalizer(() => {
+        mounted -= 1;
+      });
+      return get(source);
+    });
+    const store = makeQueuedRunEditStore<{ readonly runId: RunId }>({
+      registry,
+      label: "test-queued-run-edits",
+    });
+    const begin = () =>
+      store.begin("env:thread", { runId: RUN }, { runs, onRunLeftQueue: () => {} });
+
+    begin();
+    expect(mounted).toBe(1);
+    store.end("env:thread");
+    settle();
+    expect(mounted).toBe(0);
+
+    begin();
+    store.suspendExitWatch("env:thread");
+    settle();
+    expect(mounted).toBe(0);
+    store.resumeExitWatch("env:thread");
+    expect(mounted).toBe(1);
+
+    registry.set(source, []);
+    expect(store.get("env:thread")).toBeNull();
+    settle();
+    expect(mounted).toBe(0);
+  });
 });
 
 describe("makeQueuedRunsAtom", () => {
