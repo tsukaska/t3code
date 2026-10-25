@@ -65,8 +65,10 @@ import { ThreadPullRequestsSheet } from "./features/threads/ThreadPullRequestsSh
 import { ThreadAgentsSheet } from "./features/threads/ThreadAgentsSheet";
 import { ThreadBackgroundWorkSheet } from "./features/threads/ThreadBackgroundWorkSheet";
 import { ThreadQueueSheet } from "./features/threads/ThreadQueueControl";
-import { FullscreenThreadRouteScreen } from "./features/threads/thread-inspector-preview";
-import { ThreadRouteScreen } from "./features/threads/ThreadRouteScreen";
+import {
+  FullscreenThreadRouteScreen,
+  ThreadRouteScreen,
+} from "./features/threads/ThreadRouteScreen";
 import { McpAppFullscreenScreen } from "./features/threads/McpAppFullscreenScreen";
 import { ConnectionsRouteScreen } from "./features/connection/ConnectionsRouteScreen";
 import { ConnectionsNewRouteScreen } from "./features/connection/ConnectionsNewRouteScreen";

@@ -95,6 +95,7 @@ import {
 } from "../workspace/useAndroidWorkspaceNavigation";
 import { openSettings } from "../settings/settings-navigation";
 import {
+  InspectorContentScope,
   ThreadInspectorHeader,
   ThreadInspectorPreview,
   type ThreadInspectorPresentation,
@@ -580,6 +581,7 @@ function ThreadRouteContent(
     previewTarget && panes.auxiliaryPaneVisible ? (
       <ThreadInspectorPreview
         target={previewTarget}
+        renderThread={(screen) => <ThreadRouteScreen {...screen} />}
         onClose={toggleAuxiliaryPane}
         onOpen={(inspector) => {
           if (
@@ -1071,5 +1073,22 @@ function ThreadRouteContent(
 
       {renderThreadRouteBody()}
     </>
+  );
+}
+
+export function FullscreenThreadRouteScreen(
+  props: StaticScreenProps<{
+    readonly environmentId: string;
+    readonly threadId: string;
+  }>,
+) {
+  const navigation = useNavigation();
+  return (
+    <InspectorContentScope>
+      <ThreadRouteScreen
+        route={props.route}
+        inspectorPresentation={{ onClose: () => navigation.goBack() }}
+      />
+    </InspectorContentScope>
   );
 }

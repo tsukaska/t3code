@@ -21,7 +21,6 @@ import {
   WorkspaceContentWidthContext,
   WorkspaceSettledContentWidthContext,
 } from "../layout/workspace-content-width";
-import { ThreadRouteScreen } from "./ThreadRouteScreen";
 import {
   ThreadInspectorNavigationContext,
   type ThreadInspectorTarget,
@@ -60,7 +59,7 @@ const PreviewStack = createV5StackNavigator<{
   Thread: { readonly environmentId: string; readonly threadId: string };
 }>();
 
-function InspectorContentScope({ children }: { readonly children: ReactNode }) {
+export function InspectorContentScope({ children }: { readonly children: ReactNode }) {
   return (
     <WorkspaceSlotOptionsContext value={null}>
       <WorkspaceContentWidthContext value={null}>
@@ -76,6 +75,11 @@ export function ThreadInspectorPreview(props: {
   readonly target: ThreadInspectorTarget;
   readonly onClose: () => void;
   readonly onOpen: (target: ThreadInspectorTarget) => void;
+  readonly renderThread: (
+    props: StaticScreenProps<{ readonly environmentId: string; readonly threadId: string }> & {
+      readonly inspectorPresentation: ThreadInspectorPresentation;
+    },
+  ) => ReactNode;
 }) {
   const navigation = useNavigation();
   const focused = useIsFocused();
@@ -112,19 +116,19 @@ export function ThreadInspectorPreview(props: {
                     screenOptions={{ headerBackVisible: false }}
                   >
                     <PreviewStack.Screen name="Thread" initialParams={target}>
-                      {(screen) => (
-                        <ThreadRouteScreen
-                          route={screen.route}
-                          inspectorPresentation={{
+                      {(screen) =>
+                        props.renderThread({
+                          route: screen.route,
+                          inspectorPresentation: {
                             onClose: props.onClose,
                             onMaximize: () =>
                               navigation.navigate("ThreadInspectorFullscreen", {
                                 environmentId: screen.route.params.environmentId,
                                 threadId: screen.route.params.threadId,
                               }),
-                          }}
-                        />
-                      )}
+                          },
+                        })
+                      }
                     </PreviewStack.Screen>
                   </PreviewStack.Navigator>
                 </NavigationContainer>
@@ -134,22 +138,5 @@ export function ThreadInspectorPreview(props: {
         </NativeInspectorContent>
       </InspectorContentScope>
     </ThreadInspectorNavigationContext>
-  );
-}
-
-export function FullscreenThreadRouteScreen(
-  props: StaticScreenProps<{
-    readonly environmentId: string;
-    readonly threadId: string;
-  }>,
-) {
-  const navigation = useNavigation();
-  return (
-    <InspectorContentScope>
-      <ThreadRouteScreen
-        route={props.route}
-        inspectorPresentation={{ onClose: () => navigation.goBack() }}
-      />
-    </InspectorContentScope>
   );
 }
