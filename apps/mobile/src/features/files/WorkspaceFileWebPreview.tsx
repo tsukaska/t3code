@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { BackHandler, Platform, View } from "react-native";
+import { useState } from "react";
+import { Platform, View } from "react-native";
 import { WebView } from "react-native-webview";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -9,6 +9,7 @@ import { FilePreviewLoading } from "./FilePreviewFeedback";
 import { LoadingStrip } from "../../components/ui/LoadingStrip";
 import { PdfPreview } from "../../components/PdfPreview";
 import { ControlPill } from "../../components/ui/ControlPill";
+import { backHandlerRef } from "../../lib/backHandler";
 import { isPdfPreviewUri } from "../../lib/pdfPreview";
 import { useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
 
@@ -27,14 +28,10 @@ function DocumentWebPreview(props: { readonly uri: string }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [linkedPdf, setLinkedPdf] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (linkedPdf === null) return;
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      setLinkedPdf(null);
-      return true;
-    });
-    return () => subscription.remove();
-  }, [linkedPdf]);
+  const linkedPdfBackRef = backHandlerRef(() => {
+    setLinkedPdf(null);
+    return true;
+  });
 
   if (isPdfPreviewUri(props.uri)) {
     return (
@@ -47,7 +44,7 @@ function DocumentWebPreview(props: { readonly uri: string }) {
   return (
     <View className="relative flex-1 bg-card">
       {linkedPdf ? (
-        <View className="flex-1" style={{ paddingTop: pdfTopInset }}>
+        <View ref={linkedPdfBackRef} className="flex-1" style={{ paddingTop: pdfTopInset }}>
           <PdfPreview key={linkedPdf} uri={linkedPdf} />
           <SafeAreaView edges={["bottom"]} className="border-t border-border px-4 py-2">
             <ControlPill
