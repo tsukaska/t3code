@@ -165,7 +165,6 @@
   "apps/mobile/src/state/use-composer-attachment-actions.ts": 1,
   "apps/mobile/src/state/use-composer-drafts.ts": 3,
   "apps/mobile/src/state/use-pull-to-refresh.ts": 1,
-  "apps/mobile/src/state/use-selected-thread-git-actions.ts": 1,
   "apps/mobile/src/state/use-selected-thread-requests.ts": 2,
   "apps/mobile/src/state/use-thread-composer-state.ts": 3,
   "apps/mobile/src/state/use-thread-outbox-drain.ts": 4,
