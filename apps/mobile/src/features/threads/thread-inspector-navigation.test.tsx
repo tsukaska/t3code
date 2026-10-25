@@ -36,7 +36,7 @@ const { StackRouter, StackActions } = requireNavigation("@react-navigation/route
   StackActions: typeof import("@react-navigation/native").StackActions;
 };
 
-function setup(fromAgents: boolean) {
+function setup(fromAgents: boolean, fullscreen = false) {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   const router = StackRouter({});
   const options = {
@@ -56,7 +56,12 @@ function setup(fromAgents: boolean) {
   const source = { environmentId: "remote-environment", threadId: "parent" };
   dispatch(StackActions.push("Thread", { ...source, prompt: "retained prompt" }));
   const parentKey = state.routes.at(-1)!.key;
-  if (fromAgents) dispatch(StackActions.push("ThreadAgents", source));
+  if (fullscreen)
+    dispatch(StackActions.push("ThreadInspectorFullscreen", { ...source, threadId: "child" }));
+  if (fromAgents)
+    dispatch(
+      StackActions.push("ThreadAgents", fullscreen ? { ...source, threadId: "child" } : source),
+    );
   let openInspector: ReturnType<typeof useOpenThreadInspector>;
   let openLinkedThread: ReturnType<typeof useOpenLinkedThread>;
   function Probe() {
@@ -77,10 +82,12 @@ function setup(fromAgents: boolean) {
     get state() {
       return state;
     },
-    open(target: Parameters<typeof openInspector>[1]) {
+    open(target: Parameters<typeof openInspector>[1], from = source) {
+      let opened = false;
       act(() => {
-        openInspector(source, target);
+        opened = openInspector(from, target);
       });
+      return opened;
     },
     openLinked(threadId: string) {
       act(() => openLinkedThread({ environmentId: source.environmentId, threadId }));
@@ -135,4 +142,28 @@ it("switches between subagents and devices in the same parent route", () => {
     key: screen.parentKey,
     params: { ...screen.source, inspector },
   });
+});
+
+it.each(["thread", "device"] as const)(
+  "keeps the parent when a maximized child opens a %s preview",
+  (type) => {
+    using screen = setup(false, true);
+    const child = { ...screen.source, threadId: "child" };
+    const originalState = screen.state;
+    expect(screen.open({ type, ...child, threadId: "grandchild" }, child)).toBe(false);
+    expect(screen.state).toEqual(originalState);
+    screen.dispatch(StackActions.pop());
+    expect(screen.state.routes.at(-1)).toMatchObject({
+      key: screen.parentKey,
+      params: screen.source,
+    });
+  },
+);
+
+it("keeps the parent when the maximized child's Agents sheet opens another child", () => {
+  using screen = setup(true, true);
+  const child = { ...screen.source, threadId: "child" };
+  const originalState = screen.state;
+  expect(screen.open({ type: "thread", ...child, threadId: "grandchild" }, child)).toBe(false);
+  expect(screen.state).toEqual(originalState);
 });

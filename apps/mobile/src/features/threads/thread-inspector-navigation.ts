@@ -25,10 +25,20 @@ export function useOpenThreadInspector() {
   ) => {
     if (Platform.OS !== "ios" || !fileInspector.supported) return false;
     if (openInInspector) openInInspector(target);
-    else
+    else {
+      const parent = navigation.getState()?.routes.findLast((route) => route.name === "Thread");
+      if (
+        !parent?.params ||
+        !("environmentId" in parent.params) ||
+        parent.params.environmentId !== source.environmentId ||
+        !("threadId" in parent.params) ||
+        parent.params.threadId !== source.threadId
+      )
+        return false;
       navigation.dispatch(
         StackActions.popTo("Thread", { ...source, inspector: target }, { merge: true }),
       );
+    }
     return true;
   };
 }
