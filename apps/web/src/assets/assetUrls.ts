@@ -44,7 +44,9 @@ export function makeRevisionedAssetUrlFamily(
   ) => Atom.Atom<AsyncResult.AsyncResult<AssetCreateUrlResult, unknown>>,
 ) {
   // Outside the nodes: a node is dropped once unmounted, and the next read of
-  // its revision must still see the revisions minted since.
+  // its revision must still see the revisions minted since. Never pruned on
+  // purpose: pruning would forget the revision and re-mint on the next mount.
+  // It holds one short entry per file shown, and goes with the registry.
   const mintedUnder = new WeakMap<AtomRegistry.AtomRegistry, Map<string, string | null>>();
   const family = Atom.family((key: string) => {
     const [environmentId, resource, revision] = decodeRevisionedAssetUrlKey(JSON.parse(key));

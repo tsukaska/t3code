@@ -11,7 +11,7 @@ const resource: AssetResource = {
   fileName: "page.html",
   mimeType: "text/html",
   disposition: "inline",
-} as AssetResource;
+};
 
 type MintResult = AsyncResult.AsyncResult<{ relativeUrl: string; expiresAt: number }>;
 
