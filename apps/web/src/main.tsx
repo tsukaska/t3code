@@ -6,6 +6,7 @@ import "@fontsource-variable/inter";
 import "./index.css";
 
 import { prepareProviderAuthDelivery } from "./providerAuthDelivery";
+import { startAgentOpenedPreviews } from "./components/preview/agentOpenedPreviews";
 import { isElectron } from "./env";
 import { hasCloudPublicConfig } from "./cloud/publicConfig";
 import { getRouter } from "./router";
@@ -17,6 +18,7 @@ import { AppRoot } from "./AppRoot";
 import { clearChunkReloadGuard, reloadOnceForChunkLoadError } from "./lib/chunkReloadGuard";
 
 prepareProviderAuthDelivery();
+startAgentOpenedPreviews();
 
 // Electron loads the app from a file-backed shell, so hash history avoids path resolution issues.
 const history = isElectron ? createHashHistory() : createBrowserHistory();
