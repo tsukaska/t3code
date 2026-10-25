@@ -10,9 +10,9 @@ interface VcsStatusRevalidationTarget {
 }
 
 /**
- * One atom per environment and cwd that refreshes VCS status while mounted, so
- * controls showing the same checkout share one cadence. Refreshes on mount, on
- * reconnect when `connected` is given, and on `subscribeWake` (debounced); the
+ * One atom per environment and cwd that refreshes VCS status while mounted and
+ * shared by every subscriber. Refreshes only when `connected` is given and true
+ * (on mount and on each reconnect), and on `subscribeWake` (debounced); the wake
  * subscription and timer end with the last subscriber.
  */
 export function createVcsStatusRevalidationAtomFamily<R>(input: {
