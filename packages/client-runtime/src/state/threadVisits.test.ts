@@ -14,6 +14,7 @@ interface Shell {
   readonly updatedAt: string;
   readonly lastVisitedAt?: string | null;
   readonly latestRun: { readonly completedAt: string | null } | null;
+  readonly wokeAt?: string | null;
 }
 
 function at(seconds: number) {
@@ -127,4 +128,24 @@ it("drops a pending visit when the thread is no longer viewed", () => {
   unmount();
   vi.advanceTimersByTime(VISIT_DISPATCH_THROTTLE_MS);
   expect(t.visits).toHaveLength(1);
+});
+
+it("records the open while the thread is shown before its shell arrives", () => {
+  using t = setup("thread-shell-missing", null);
+  t.mount();
+  expect(claimThreadOpen(environmentId, t.ref.threadId, Date.UTC(2026, 0, 1))).toBe(false);
+
+  t.update({ updatedAt: at(10), lastVisitedAt: at(0), latestRun: null });
+  expect(t.visits).toEqual([{ threadId: t.ref.threadId, visitedAt: at(10) }]);
+});
+
+it("advances the watermark to a wake without waiting for the throttle", () => {
+  using t = setup("thread-wake", { updatedAt: at(10), lastVisitedAt: at(0), latestRun: null });
+  t.mount();
+  t.update({ wokeAt: at(15) });
+  expect(t.visits.slice(1)).toEqual([{ threadId: t.ref.threadId, visitedAt: at(15) }]);
+
+  vi.advanceTimersByTime(1_000);
+  t.update({ updatedAt: at(16) });
+  expect(t.visits).toHaveLength(2);
 });

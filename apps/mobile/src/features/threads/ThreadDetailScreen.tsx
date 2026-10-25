@@ -380,9 +380,9 @@ const USER_INPUT_TOGGLE_TIMING = {
   easing: Easing.out(Easing.cubic),
 };
 
-// A scheduled wake is an update the user sees without a newer server
-// updatedAt, so the watermark advances to it. The shell's updatedAt ticks
-// while a run streams; the tracker follows it outside React.
+// A scheduled wake can happen without a newer server update, so the tracker
+// is told when one takes effect. The shell's updatedAt ticks while a run
+// streams; the tracker follows it outside React.
 const wakeAwareVisitShell = Atom.family((key: string) => {
   const ref = parseThreadKey(key);
   return Atom.make((get) => {
@@ -398,17 +398,7 @@ const wakeAwareVisitShell = Atom.family((key: string) => {
       );
       get.addFinalizer(() => clearTimeout(timer));
     }
-    if (wokeAt === null || Date.parse(wokeAt) <= Date.parse(shell.updatedAt)) return shell;
-    // Like a completion, a wake the user is looking at must not wait out the
-    // throttle: leaving within it would cancel the dispatch and keep Woke in
-    // the list. The tracker sends unseen completions at once.
-    return {
-      environmentId: shell.environmentId,
-      id: shell.id,
-      updatedAt: wokeAt,
-      lastVisitedAt: shell.lastVisitedAt,
-      latestRun: { completedAt: wokeAt },
-    };
+    return { ...shell, wokeAt };
   }).pipe(Atom.withLabel(`mobile-thread-visit-shell:${key}`));
 });
 
@@ -416,11 +406,6 @@ const threadVisitTracker = createThreadVisitTracker({
   threadShellAtom: (ref) => wakeAwareVisitShell(threadKey(ref)),
   visit: threadEnvironment.visit,
 });
-
-function ThreadVisitWatermark(props: { readonly threadRef: ScopedThreadRef }) {
-  useAtomMount(threadVisitTracker(props.threadRef));
-  return null;
-}
 
 // Past the composer's 180 ms height animation.
 const COMPOSER_HEIGHT_SETTLE_MS = 220;
@@ -1090,6 +1075,14 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
     userInputInsetProgress.set(1);
   }, [activeUserInputRequestId, userInputCardProgress, userInputInsetProgress]);
   const showContent = props.showContent ?? true;
+  // Showing the thread counts as viewing it, before its live shell arrives too.
+  useAtomMount(
+    threadVisitTracker(
+      showContent && !props.draftMode
+        ? { environmentId: props.environmentId, threadId: props.selectedThread.id }
+        : null,
+    ),
+  );
   const layoutVariant = props.layoutVariant ?? "compact";
   const isSplitLayout = layoutVariant === "split";
   const contentMaxWidth =
@@ -1358,11 +1351,6 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
   return (
     <View className="flex-1" onLayout={handleScreenLayout}>
       {!usesNativeWorkspaceColumns ? <NativeLayoutObserver onChange={setScreenMetrics} /> : null}
-      {showContent && !props.draftMode ? (
-        <ThreadVisitWatermark
-          threadRef={{ environmentId: props.environmentId, threadId: props.selectedThread.id }}
-        />
-      ) : null}
       {props.draftMode ? (
         props.draftMode.content(
           navigationHeaderHeight,

@@ -12,12 +12,23 @@ import type { VisitThreadInput } from "./threadCommands.ts";
 // broadcast to all shell subscribers.
 export const VISIT_DISPATCH_THROTTLE_MS = 10_000;
 
+const IDLE_TRACKER: Atom.Atom<void> = Atom.make(undefined).pipe(
+  Atom.withLabel("thread-visit-tracker:idle"),
+);
+
 interface VisitedShell {
   readonly environmentId: EnvironmentId;
   readonly id: ThreadId;
   readonly updatedAt: string;
   readonly lastVisitedAt?: string | null | undefined;
   readonly latestRun: { readonly completedAt: string | null } | null;
+  /**
+   * When a scheduled wake the user is looking at took effect. A wake later
+   * than `updatedAt` is an update the server never sent, so the watermark
+   * advances to it, and at once: leaving within the throttle would cancel
+   * the dispatch and keep the thread marked Woke.
+   */
+  readonly wokeAt?: string | null | undefined;
 }
 
 export interface ThreadVisitTrackerOptions {
@@ -44,7 +55,11 @@ export function createThreadVisitTracker(options: ThreadVisitTrackerOptions) {
     const ref = parseThreadKey(key);
     return Atom.make((get) => {
       const registry = get.registry;
-      let openRecorded = false;
+      // Showing the thread is the open, whether or not its shell has arrived;
+      // the shell only decides whether the server hears about it now.
+      // Recorded even when the server cannot take opens, so recents follow
+      // it. A palette pick already sent the open with its query.
+      let openPending = claimThreadOpen(ref.environmentId, ref.threadId, Date.now());
       // Dedupe per watermark: the shell updates again before the command's echo
       // lands. It also keeps a mark-unread on the open thread sticky, since the
       // rewind leaves updatedAt untouched.
@@ -58,9 +73,9 @@ export function createThreadVisitTracker(options: ThreadVisitTrackerOptions) {
       };
       get.addFinalizer(clearTimer);
 
-      const dispatch = (shell: VisitedShell, opened: boolean) => {
+      const dispatch = (shell: VisitedShell, visitedAt: string, opened: boolean) => {
         clearTimer();
-        lastDispatchedUpdatedAt = shell.updatedAt;
+        lastDispatchedUpdatedAt = visitedAt;
         lastDispatchAt = Date.now();
         void runAtomCommand(
           registry,
@@ -69,7 +84,7 @@ export function createThreadVisitTracker(options: ThreadVisitTrackerOptions) {
             environmentId: shell.environmentId,
             input: {
               threadId: shell.id,
-              visitedAt: shell.updatedAt,
+              visitedAt,
               ...(opened ? { opened: true } : {}),
             },
           },
@@ -79,24 +94,29 @@ export function createThreadVisitTracker(options: ThreadVisitTrackerOptions) {
 
       const onShell = (shell: VisitedShell | null) => {
         clearTimer();
+        // Only a shell present when the thread is shown carries the open; one
+        // that arrives later is an ordinary visit.
+        const opened = openPending;
+        openPending = false;
         if (shell === null) return;
-        if (!openRecorded) {
-          openRecorded = true;
-          // Recorded even when the server cannot take opens, so recents follow
-          // it. A palette pick already sent the open with its query.
-          const claimed = claimThreadOpen(shell.environmentId, shell.id, Date.now());
-          if (claimed && shell.lastVisitedAt !== undefined) dispatch(shell, true);
-        }
 
-        const updatedAtMs = Date.parse(shell.updatedAt);
-        if (Number.isNaN(updatedAtMs)) return;
+        const shellUpdatedAtMs = Date.parse(shell.updatedAt);
+        if (Number.isNaN(shellUpdatedAtMs)) return;
+        const wokeAtMs = shell.wokeAt ? Date.parse(shell.wokeAt) : NaN;
+        const wakeIsLatest = wokeAtMs > shellUpdatedAtMs;
+        const visitedAt = wakeIsLatest && shell.wokeAt ? shell.wokeAt : shell.updatedAt;
+        const updatedAtMs = wakeIsLatest ? wokeAtMs : shellUpdatedAtMs;
         if (shell.lastVisitedAt === undefined) {
-          options.markLocalVisit?.(ref, shell.updatedAt);
+          options.markLocalVisit?.(ref, visitedAt);
+          return;
+        }
+        if (opened) {
+          dispatch(shell, visitedAt, true);
           return;
         }
         const lastVisitedAtMs = shell.lastVisitedAt ? Date.parse(shell.lastVisitedAt) : NaN;
         if (!Number.isNaN(lastVisitedAtMs) && lastVisitedAtMs >= updatedAtMs) return;
-        if (lastDispatchedUpdatedAt === shell.updatedAt) return;
+        if (lastDispatchedUpdatedAt === visitedAt) return;
 
         const completedAtMs = shell.latestRun?.completedAt
           ? Date.parse(shell.latestRun.completedAt)
@@ -105,11 +125,14 @@ export function createThreadVisitTracker(options: ThreadVisitTrackerOptions) {
           !Number.isNaN(completedAtMs) &&
           (Number.isNaN(lastVisitedAtMs) || completedAtMs > lastVisitedAtMs);
         const elapsed = Date.now() - lastDispatchAt;
-        if (hasUnseenCompletion || elapsed >= VISIT_DISPATCH_THROTTLE_MS) {
-          dispatch(shell, false);
+        if (hasUnseenCompletion || wakeIsLatest || elapsed >= VISIT_DISPATCH_THROTTLE_MS) {
+          dispatch(shell, visitedAt, false);
           return;
         }
-        timer = setTimeout(() => dispatch(shell, false), VISIT_DISPATCH_THROTTLE_MS - elapsed);
+        timer = setTimeout(
+          () => dispatch(shell, visitedAt, false),
+          VISIT_DISPATCH_THROTTLE_MS - elapsed,
+        );
       };
 
       // `subscribe`, not `get`: a rebuild would reset the open and throttle
@@ -117,5 +140,5 @@ export function createThreadVisitTracker(options: ThreadVisitTrackerOptions) {
       get.subscribe(options.threadShellAtom(ref), onShell, { immediate: true });
     }).pipe(Atom.withLabel(`thread-visit-tracker:${key}`));
   });
-  return (ref: ScopedThreadRef) => family(threadKey(ref));
+  return (ref: ScopedThreadRef | null) => (ref === null ? IDLE_TRACKER : family(threadKey(ref)));
 }
